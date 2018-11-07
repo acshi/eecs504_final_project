@@ -164,6 +164,7 @@ def noise(size):
     n = Variable(torch.randn(size, 100, 1, 1))
     return n
 
+print("Has CUDA? {}".format(torch.cuda.is_available()))
 print("Using {} threads!".format(torch.get_num_threads()))
 print("Discriminator parameter count: {}".format(sum(p.numel() for p in discriminator.parameters() if p.requires_grad)))
 print("Generator parameter count: {}".format(sum(p.numel() for p in generator.parameters() if p.requires_grad)))
