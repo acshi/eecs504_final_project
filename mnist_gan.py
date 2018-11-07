@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import time
 import random
 import torch
 from torch import nn, optim
@@ -11,6 +12,8 @@ from utils import Logger
 manualSeed = 999
 random.seed(manualSeed)
 torch.manual_seed(manualSeed)
+
+torch.set_num_threads(3)
 
 def mnist_data():
     compose = transforms.Compose(
@@ -240,6 +243,7 @@ logger = Logger(model_name='VGAN', data_name='MNIST')
 # Total number of epochs to train
 num_epochs = 200
 
+batch_start_time = time.time()
 for epoch in range(num_epochs):
     for n_batch, (real_batch,_) in enumerate(data_loader):
         N = real_batch.size(0)
@@ -265,6 +269,13 @@ for epoch in range(num_epochs):
 
         # Log batch error
         logger.log(d_error, g_error, epoch, n_batch, num_batches)
+
+        # Report rate every fewer batches
+        if (n_batch) % 10 == 0:
+            now_time = time.time()
+            elapsed = now_time - batch_start_time
+            batch_start_time = now_time
+            print("10 Batches took {:.3f} ms".format(elapsed * 1000))
 
         # Display Progress every few batches
         if (n_batch) % 100 == 0:
