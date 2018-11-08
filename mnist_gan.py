@@ -270,15 +270,13 @@ for epoch in range(num_epochs):
         # Log batch error
         logger.log(d_error, g_error, epoch, n_batch, num_batches)
 
-        # Report rate every fewer batches
-        if (n_batch) % 10 == 0:
+        # Display Progress every few batches
+        if (n_batch) % 100 == 0:
             now_time = time.time()
             elapsed = now_time - batch_start_time
             batch_start_time = now_time
-            print("10 Batches took {:.3f} ms".format(elapsed * 1000))
+            print("Batches took {:.3f} ms".format(elapsed * 1000))
 
-        # Display Progress every few batches
-        if (n_batch) % 100 == 0:
             test_images = generator(test_noise)
             test_images = test_images.data
 
