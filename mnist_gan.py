@@ -67,7 +67,7 @@ class DiscriminatorNet(torch.nn.Module):
             nn.Dropout(0.1),
 
             nn.Conv2d(64, 64*2, 4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(64*2)
+            nn.BatchNorm2d(64*2),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout(0.1),
         )
@@ -121,13 +121,13 @@ class GeneratorNet(torch.nn.Module):
         self.hidden = nn.Sequential(
             # We start out with a 1 "pixel" "image" with n_features "channels"
             nn.ConvTranspose2d(n_features, 64*2, 7, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(64*2)
+            nn.BatchNorm2d(64*2),
             nn.ReLU(True),
             nn.Dropout(0.1), #0.1-0.2 works better for conv nets. (randomly zero 10% of features)
             # 7x7
 
             nn.ConvTranspose2d(64*2, 64, 4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(64)
+            nn.BatchNorm2d(64),
             nn.ReLU(True),
             nn.Dropout(0.1),
             # 14x14
