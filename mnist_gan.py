@@ -60,19 +60,37 @@ class DiscriminatorNet(torch.nn.Module):
         #     nn.Sigmoid()
         # )
 
-        self.hidden = nn.Sequential(
+        self.stage1 = nn.Sequential(
             nn.Conv2d(1, 64, 4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(64), # normalize features to allow faster training. Also regularizes
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout(0.4),
+            nn.Dropout(0.1),
 
             nn.Conv2d(64, 64*2, 4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(64*2),
+            nn.BatchNorm2d(64*2)
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout(0.4),
+            nn.Dropout(0.1),
+        )
 
+        self.dicriminate = nn.Sequential(
+            self.stage1,
             nn.Conv2d(64*2, 1, 7, stride=1, padding=0, bias=False),
             nn.Sigmoid()
         )
+
+        self.classify = nn.Sequential(
+            self.stage1,
+            nn.Conv2d(64*2, 10, 7, stride=1, padding=0, bias=False),
+            nn.Sigmoid()
+        )
+
+    def freeze_stage1(self):
+        for p in self.stage1.parameters():
+            p.requires_grad = False
+
+    def unfreeze_stage1(self):
+        for p in self.stage1.parameters():
+            p.requires_grad = True
 
     def forward(self, x):
         # x = self.hidden0(x)
@@ -80,7 +98,7 @@ class DiscriminatorNet(torch.nn.Module):
         # x = self.hidden2(x)
         # x = self.out(x)
         # return x
-        return self.hidden(x)
+        return self.dicriminate(x)
 
 discriminator = DiscriminatorNet()
 
@@ -102,37 +120,21 @@ class GeneratorNet(torch.nn.Module):
         # Based on https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
         self.hidden = nn.Sequential(
             # We start out with a 1 "pixel" "image" with n_features "channels"
-
-            # nn.ConvTranspose2d(n_features, 64*8, 4, stride=1, padding=0, bias=False),
-            # nn.BatchNorm2d(64*8), # 64*8=512
-            # nn.ReLU(True),
-            # Now have 4x4 image, 64*8 channels per pixel = 8192 values
-
-            # nn.ConvTranspose2d(64*8, 64*4, 4, stride=2, padding=1, bias=False),
-            # nn.BatchNorm2d(64*4), # 64*4=256
-            # nn.ReLU(True),
-            # Now have 8x8 image, 64*4 channels per pixel = 16384 values
-
             nn.ConvTranspose2d(n_features, 64*2, 7, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(64*2), # 64*2=128
+            nn.BatchNorm2d(64*2)
             nn.ReLU(True),
-            nn.Dropout(0.4),
+            nn.Dropout(0.1), #0.1-0.2 works better for conv nets. (randomly zero 10% of features)
             # 7x7
 
-            # Now have 16x16 image, 64*2 channels per pixel = 32768 values
-
             nn.ConvTranspose2d(64*2, 64, 4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(64),
+            nn.BatchNorm2d(64)
             nn.ReLU(True),
+            nn.Dropout(0.1),
             # 14x14
-
-            # Now have 32x32 image, 64 channels per pixel = 65536 values
 
             nn.ConvTranspose2d(64, 1, 4, stride=2, padding=1, bias=False),
             nn.Tanh(),
             # 28x28
-
-            # Now have 64x64 image, 1 channel per pixel = 4096 values
         )
 
         # self.hidden0 = nn.Sequential(
@@ -176,8 +178,8 @@ print("Discriminator parameter count: {}".format(sum(p.numel() for p in discrimi
 print("Generator parameter count: {}".format(sum(p.numel() for p in generator.parameters() if p.requires_grad)))
 # exit()
 
-d_optimizer = optim.Adam(discriminator.parameters(), lr=0.0002)
-g_optimizer = optim.Adam(generator.parameters(), lr=0.0002)
+d_optimizer = optim.Adam(discriminator.parameters(), lr=0.0004)
+g_optimizer = optim.Adam(generator.parameters(), lr=0.0004)
 
 loss = nn.BCELoss()
 
@@ -195,16 +197,19 @@ def zeros_target(size):
     data = Variable(torch.rand(size, 1, 1, 1) * 0.4)
     return data
 
-def train_discriminator(optimizer, real_data, fake_data):
-    N = real_data.size(0)
-    # Reset gradients
-    optimizer.zero_grad()
-
+def train_discriminator(optimizer, real_data, N):
     # 1.1 Train on Real Data
     prediction_real = discriminator(real_data)
+
+    # Reset gradients
+    optimizer.zero_grad()
     # Calculate error and backpropagate
     error_real = loss(prediction_real, ones_target(N))
     error_real.backward()
+
+    # Generate fake data and detach
+    # (so gradients are not calculated for generator)
+    fake_data = generator(noise(N)).detach()
 
     # 1.2 Train on Fake Data
     prediction_fake = discriminator(fake_data)
@@ -218,14 +223,33 @@ def train_discriminator(optimizer, real_data, fake_data):
     # Return error and predictions for real and fake inputs
     return error_real + error_fake, prediction_real, prediction_fake
 
-def train_generator(optimizer, fake_data):
-    N = fake_data.size(0)
+def labels_to_onehot(real_labels):
+    batch_size = real_labels.shape[0]
+    one_hot = torch.zeros([batch_size, 10, 1, 1])
+    for i in range(0, batch_size):
+        one_hot[i, real_labels[i], 0, 0] = 1
 
-    # Reset gradients
+    return one_hot
+
+def train_classifier(optimizer, real_data, real_labels):
+    discriminator.freeze_stage1()
+
+    prediction = discriminator.classify(real_data)
+
     optimizer.zero_grad()
+    error_classify = loss(prediction, labels_to_onehot(real_labels))
+    error_classify.backward()
 
-    # Sample noise and generate fake data
+    discriminator.unfreeze_stage1()
+
+    return error_classify
+
+def train_generator(optimizer, N):
+    fake_data = generator(noise(N))
     prediction = discriminator(fake_data)
+
+    # Reset gradients, they are filled by the call to backward
+    optimizer.zero_grad()
 
     # Calculate error and backpropagate
     error = loss(prediction, ones_target(N))
@@ -248,33 +272,24 @@ num_epochs = 200
 
 batch_start_time = time.time()
 for epoch in range(num_epochs):
-    for n_batch, (real_batch,_) in enumerate(data_loader):
+    for n_batch, (real_batch, real_labels) in enumerate(data_loader):
         N = real_batch.size(0)
 
         # 1. Train Discriminator
         real_data = Variable(real_batch)
-
-        # Generate fake data and detach
-        # (so gradients are not calculated for generator)
-        fake_data = generator(noise(N)).detach()
-
-        # Train D
-        d_error, d_pred_real, d_pred_fake = \
-              train_discriminator(d_optimizer, real_data, fake_data)
+        d_error, d_pred_real, d_pred_fake = train_discriminator(d_optimizer, real_data, N)
 
         # 2. Train Generator
+        g_error = train_generator(g_optimizer, N)
 
-        # Generate fake data
-        fake_data = generator(noise(N))
-
-        # Train G
-        g_error = train_generator(g_optimizer, fake_data)
+        # 3. Train Classifier
+        c_error = train_classifier(d_optimizer, real_data, real_labels)
 
         # Log batch error
         logger.log(d_error, g_error, epoch, n_batch, num_batches)
 
         # Display Progress every few batches
-        if (n_batch) % 100 == 0:
+        if n_batch % 10 == 0:
             now_time = time.time()
             elapsed = now_time - batch_start_time
             batch_start_time = now_time
@@ -290,5 +305,5 @@ for epoch in range(num_epochs):
             # Display status Logs
             logger.display_status(
                 epoch, num_epochs, n_batch, num_batches,
-                d_error, g_error, d_pred_real, d_pred_fake
+                d_error, g_error, c_error, d_pred_real, d_pred_fake
             )
