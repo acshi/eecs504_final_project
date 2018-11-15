@@ -6,6 +6,7 @@ from tensorboardX import SummaryWriter
 from IPython import display
 from matplotlib import pyplot as plt
 import torch
+import time
 
 '''
     TensorBoard Data will be stored in './runs' path
@@ -89,8 +90,13 @@ class Logger:
     def _save_images(self, fig, epoch, n_batch, comment=''):
         out_dir = './data/images/{}'.format(self.data_subdir)
         Logger._make_dir(out_dir)
-        fig.savefig('{}/{}_epoch_{}_batch_{}.png'.format(out_dir,
-                                                         comment, epoch, n_batch))
+        while True:
+            try:
+                fig.savefig('{}/{}_epoch_{}_batch_{}.png'.format(out_dir, comment, epoch, n_batch))
+                return
+            except Exception:
+                print("Couldn't save image! Stop looking at it!")
+                time.sleep(1)
 
     def display_status(self, epoch, num_epochs, n_batch, num_batches, d_error, g_error, c_error, d_pred_real, d_pred_fake):
 

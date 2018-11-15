@@ -10,9 +10,7 @@ from utils import Logger
 
 # Set random seem for reproducibility
 manualSeed = 999
-random.seed(manualSeed)
 torch.manual_seed(manualSeed)
-
 torch.set_num_threads(3)
 
 def mnist_data():
@@ -62,7 +60,7 @@ class DiscriminatorNet(torch.nn.Module):
 
         self.stage1 = nn.Sequential(
             nn.Conv2d(1, 64, 4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(64), # normalize features to allow faster training. Also regularizes
+            # nn.BatchNorm2d(64), # normalize features to allow faster training. Also regularizes
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout(0.1),
 
