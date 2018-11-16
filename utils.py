@@ -39,15 +39,13 @@ class Logger:
         self.writer.add_scalar(
             '{}/G_error'.format(self.comment), g_error, step)
 
-    def log_images(self, images, num_images, epoch, n_batch, num_batches, format='NCHW', normalize=True):
+    def log_images(self, images, num_images, epoch, n_batch, num_batches, normalize=True):
         '''
-        input images are expected in format (NCHW)
+        input images are expected in format (NHWC)
         '''
         if type(images) == np.ndarray:
             images = torch.from_numpy(images)
-
-        if format=='NHWC':
-            images = images.transpose(1,3)
+        images = images.transpose(1,3)
 
 
         step = Logger._step(epoch, n_batch, num_batches)
