@@ -4,6 +4,10 @@ import time
 import random
 import os
 
+# supress silly warnings from master branch of tensorflow...
+import sys
+sys.stderr = None
+
 import torch
 import torchvision
 from utils import Logger
