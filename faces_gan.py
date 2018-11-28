@@ -101,7 +101,6 @@ def batch_generator(batch_size):
 # os.listdir("somedirectory")
 
 batch_size = 100
-batch_gen = batch_generator(batch_size)
 num_batches = 39370 / batch_size # approximately
 
 def noise(size):
@@ -260,6 +259,7 @@ tf.global_variables_initializer().run()
 
 batch_start_time = time.time()
 for epoch in range(num_epochs):
+    batch_gen = batch_generator(batch_size)
     for n_batch, (real_images, small_images, real_labels) in batch_gen:
         # 1. Train Discriminator
         feed_dict = {X: real_images, X_labels: real_labels, Z: small_images}
