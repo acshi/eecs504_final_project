@@ -144,7 +144,7 @@ def generator(x):
 
         with tf.variable_scope("conv2"):
             # residual block with (up to) 8 convolution layers
-            n_conv_layers = 2;
+            n_conv_layers = 8;
 
             previous = conv1
             for i in range(n_conv_layers):
@@ -206,7 +206,7 @@ G_classification_loss = tf.reduce_mean(
         logits=D_fake_face, labels=X_labels
     )
 )
-G_loss = G_pixel_loss + G_adversarial_loss + G_classification_loss
+G_loss = G_pixel_loss + 0.001 * G_adversarial_loss + 0.01 * G_classification_loss
 
 # Discriminator
 D_loss_real = tf.reduce_mean(
@@ -240,8 +240,9 @@ D_vars = [var for var in train_vars if 'discriminator' in var.name]
 print("Discriminator parameter count: {}".format(np.sum([np.product(v.get_shape()) for v in D_vars])))
 print("Generator parameter count: {}".format(np.sum([np.product(v.get_shape()) for v in G_vars])))
 
-G_opt = tf.train.AdamOptimizer(4e-4).minimize(G_loss, var_list=G_vars)
-D_opt = tf.train.AdamOptimizer(4e-4).minimize(D_loss, var_list=D_vars)
+learning_rate = tf.placeholder(tf.float32, shape=[])
+G_opt = tf.train.AdamOptimizer(learning_rate).minimize(G_loss, var_list=G_vars)
+D_opt = tf.train.AdamOptimizer(learning_rate).minimize(D_loss, var_list=D_vars)
 
 num_test_samples = 16
 _, (test_batch, test_small_images, test_labels) = next(batch_generator(num_test_samples))
@@ -250,7 +251,7 @@ _, (test_batch, test_small_images, test_labels) = next(batch_generator(num_test_
 logger = Logger(model_name='FACEGAN')
 
 # Total number of epochs to train
-num_epochs = 200
+num_epochs = 10
 
 # Start interactive session
 session = tf.InteractiveSession()
@@ -259,14 +260,16 @@ tf.global_variables_initializer().run()
 
 batch_start_time = time.time()
 for epoch in range(num_epochs):
+    lr = 1e-4 if epoch < 5 else 1e-5
+
     batch_gen = batch_generator(batch_size)
     for n_batch, (real_images, small_images, real_labels) in batch_gen:
         # 1. Train Discriminator
-        feed_dict = {X: real_images, X_labels: real_labels, Z: small_images}
+        feed_dict = {X: real_images, X_labels: real_labels, Z: small_images, learning_rate: lr}
         _, d_error, d_pred_real, d_pred_fake = session.run([D_opt, D_loss, D_real, D_fake], feed_dict=feed_dict)
 
         # 2. Train Generator
-        feed_dict = {X: real_images, X_labels: real_labels, Z: small_images}
+        feed_dict = {X: real_images, X_labels: real_labels, Z: small_images, learning_rate: lr}
         _, g_error = session.run([G_opt, G_loss], feed_dict=feed_dict)
 
         # Display Progress every few batches
